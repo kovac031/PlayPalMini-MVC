@@ -1,0 +1,416 @@
+- napraviti SQL database, tables, insert into
+
+- create new asp.net web application
+- project name je nesto.MVC, solution name je nesto
+- odaberes MVC na sljedecem koraku
+
+- pravis class library za multilayer arhitekturu, nazivi su PlayPalMini.Repository  i sl
+	- napravis i DAL tako ALI onda add new item - adonet entity data model
+	- nazoves EFContext jer je to entity framework
+	- code first from database a ime onda nesto drugo - npr PlayPalMiniDatabase
+
+- BoardGameDTO u PlayPalMini.Model ... njegov interface u model.common
+	- isto u MVC Models folder kao BoardGameView
+
+- a u Controllers folder BoardGameController
+- u Service BoardGameService
+- u Service Common IBoardGameService
+- za Repository opet isto
+
+- instaliras autofac mvc5 (manage nuget packages) (bez toga valjda ne radi MVC)
+- u MVC/ App_Start napravis DIContainer.cs
+
+- kopiras kod, treba imat tvoj context i tvoji repository/service, a ostalo mora tak bit kak je:
+
+public static void Configure()
+        {
+            var builder = new ContainerBuilder();
+            builder.RegisterControllers(typeof(MvcApplication).Assembly);
+
+            builder.RegisterType<EFContext>().AsSelf();
+
+            builder.RegisterType<BoardGameService>().As<IBoardGameService>();
+            builder.RegisterType<BoardGameRepository>().As<IBoardGameRepository>();
+            builder.RegisterType<ReviewService>().As<IReviewService>();
+            builder.RegisterType<ReviewRepository>().As<IReviewRepository>();
+
+            var container = builder.Build();
+            DependencyResolver.SetResolver(new AutofacDependencyResolver(container));
+        }
+
+- dodas DIContainer.Configure(); u global.asax.cs
+
+- instaliras entityframework 6.4.4 jer inace dependency injection ne radi, Context ono
+
+- nakon svakog CRUD, u kontroleru unutar zagrada add view (razor pages)
+	- list za get all
+	- detail za get by id
+	- model class izabrati ImeKontroleraView iz Modela iz MVCa
+	- data context class nista
+	- naziv viewa ako nije isti kao metoda iz kontrolera ce javit gresku (morat cu rucno u kontroleru definirat URL  sta da otvara, bolje imat isti)
+
+- kod mapiranja u kontroleru i repositoriju NE treba imati sve iz modela da bi radilo (ali ako ce trebat, a trebat ce, linkat getall sa getbyid view, id ce bit null ako ga ne mapiras)
+
+- sorting, filtering, paging: https://learn.microsoft.com/en-us/aspnet/mvc/overview/getting-started/getting-started-with-ef-using-mvc/sorting-filtering-and-paging-with-the-entity-framework-in-an-asp-net-mvc-application
+
+- get all, sorting
+	- u kontroler ide viewbag logika
+	- u repository ide switch loop
+	- jedino se zbog tog switch loopa proslijedjuje sorting varijabla iz metode u repozitoriju dole do kontrolera
+
+- za paging treba instalirat pagedlist.mvc paket
+
+- u Razor view na vrh:
+
+@using PagedList
+@using PagedList.Mvc
+
+@using PlayPalMini.Model
+@using PlayPalMini.MVC.Models
+
+@model StaticPagedList<BoardGameView>
+
+- neznam zasto smo mi na tecaju IPagedList, s tim nisam uspio da persistaju drugi parametri u URL, ali sam uspio sa StaticPagedList
+	- sve se u kontroleru odvija, repository dohvaca cijelu listu
+	- prvo dohvacas sve, pa ako ima filterBy zadan onda pravis filtriranu listu, i tek tu filtriranu listu (koja je u biti DTO tip) mapiras u listView uz PagedList logiku (pagedlist.mvc paket ima te svoje neke zahtjeve)
+	- i kad imas klasicni listView, iniciras novu StaticPagedList sa njenim potrebnim parametrima
+
+- deklariras ViewBag.Sve za sve sta ce ti trebati u URL da persista (kad si npr. na drugoj stranici da sortiranje ne ponisti da si na drugoj stranici i vrati te na prvu npr)
+
+- ak ces sortirati po stupcima treba ovako da persistaju svi parametri npr (ovdje sorting, filterBy i page):
+
+	<th>
+		@Html.ActionLink("Title", "GetAllBoardGamesAsync", new { sorting = ViewBag.SortByTitle, filterBy = ViewBag.CurrentFilter, page = ViewBag.CurrentPage })
+	</th>
+
+- na kraju zbog paginacije ide (neznam zasto ali tu ide page ili page = page, ako pisem page = ViewBag.CurrentPage ne rade buttoni za page):
+
+@if (Model.PageCount > 1)
+{
+    <div class="pager">
+        @Html.PagedListPager(Model, page => Url.Action("GetAllBoardGamesAsync", new { page, filterBy = ViewBag.CurrentFilter, sorting = ViewBag.CurrentSort }))
+    </div>
+}
+
+- za dodati partial view za review na board game details page
+	- get all reviews prvo
+	- board game details naravno, get by id
+	- get all za review "where", ali u kontroleru await board game get by id i usporedis njegov Id sa boardGameId, ako je isti, ucitaj reviewse
+	- return PartialView("_GetReviewsForSpecificGameAsync", listView); partial view pocinje sa _
+	- add new view -> oznaci partial kucicu je jedina razlika za tu get all reviews metodu
+	- dodas kod u view gdje zelis prikazati partial view, ovdje board game details:
+----------------------
+@{
+    var id = Model.Id;
+}
+<div id="partialReviews">
+
+</div>
+
+@section Scripts
+    {
+    <script>
+        var id = '@id';
+        $('#partialReviews').load('@Url.Action("GetReviewsForSpecificGameAsync", "Review", new { id = id })');
+    </script>
+}
+------------------------
+
+- ista stvar za create review doslovno
+	- s tim da nece prihvacati new guid za boardgameId jer trazi postojeci jer je FK, pa mos rucno podesit prvo ili svejedno
+	- a onda podesit da vuce boardGameId iz Id-a od specific board game
+
+- za delete ne treba view ako ce bit samo dugme
+
+- sve CRUD operacije za review i board game
+
+...
+
+- SQLquery2, dodajem tablicu za role, sad ide dio za autentikaciju i autorizaciju
+
+- napravi RegisteredUser sve što imaju BoardGame i Review, ne zaboraviti DIConfig izmjene, DAL (vise toga), EFContext
+- kontroler za Login moze biti taj RegisteredUser, napravi Login metodu (nema nista u njoj, return View) napraviti View koji je Create tipa, httppost Login dio metode ce bit za autentikaciju
+
+- u webconfig gdje je i info za bazu, unutar system.web zgrada ubaciti:
+
+<authentication mode="Forms">
+	<forms loginUrl="~/RegisteredUser/Login" timeout="2880" />
+</authentication>
+
+- tek tada radi ovo FormsAuthentication.SetAuthCookie(userDTO.Username, false); u kontroleru
+
+- u razor view je dovoljno IF petlja npr @if (User.Identity.IsAuthenticated)
+
+(ovo je pomoglo https://dotnettutorials.net/lesson/forms-authentication-in-mvc/)
+( i ovo https://www.youtube.com/watch?v=dbeMlkYtigw)
+
+- za autorizaciju prvo u isti webconfig na isto mjesto:
+
+<roleManager defaultProvider="usersRoleProvider" enabled="true">
+  	<providers>
+		<clear />
+		<add name="usersRoleProvider" type="PlayPalMini.MVC.Models.UsersRoleProvider" />
+	</providers>
+</roleManager>
+
+- upute sa https://dotnettutorials.net/lesson/role-based-authentication-in-mvc/ ... nemoj zaboraviti preimenovati namespace nakon kopiranja
+
+...
+
+- SQLquery3, dodajem CreatedBy, UpdatedBy, DateCreated, DateUpdated
+
+- dodati nove parametre gdje treba
+
+- create review sad baca exception, neznam zasto ... treba EFcontext popraviti
+	- nisam uspio updejtat, skrljao DAL i napravio novi ... onda trebalo dodati reference i clean solution i rebuild puno puta ali sada sve opet radi
+
+- Login metodu treba nadopunit jer mi sada treba vise podataka od samo username:
+
+----------------------------------------
+
+string userId = userDTO.Id.ToString();
+
+FormsAuthenticationTicket ticket = new FormsAuthenticationTicket(1, userDTO.Username, DateTime.Now, DateTime.Now.AddMinutes(15), false, userId);
+                
+string encryptedTicket = FormsAuthentication.Encrypt(ticket);
+                
+HttpCookie cookie = new HttpCookie(FormsAuthentication.FormsCookieName, encryptedTicket);
+                
+HttpContext.Response.Cookies.Add(cookie);
+
+------------------------------------------
+
+- dohvacanje usera iz forms authentication cookie:
+
+-----------------------------------------
+
+string userId = "";
+string userName = "";
+
+            if (User.Identity is FormsIdentity identity)
+            {
+                userId = identity.Ticket.UserData;
+                userName = identity.Name;
+            }
+
+--------------------------------------------
+
+- nakon mapiranja novih parametara gdje treba, dodati autorizacije u razor viewove gdje hocu da se sto prikazuje
+- truncate description i sl u razor view:
+
+		<td>
+                    @{
+                        string truncate = item.Description;
+                        if (truncate.Length > 50)
+                        {
+                            truncate = truncate.Substring(0, 50) + "...";
+                        }
+                    }
+                    @Html.DisplayFor(modelItem => truncate)
+                </td>
+
+- za prosiriti polja za unos teksta, u MVC modelu iznad tog parametra dodati:
+	- [DataType(DataType.MultilineText)]
+
+- get my reviews metodu za logiranog usera
+
+- drop down meni kad se logira
+	- chatgpt je nakon 3 dana natezanja pretumbao _layout.cshtml i nije znao rijesiti nego sam se posluzio kodom iz grupnog zadatka; nesto sa javascript, jquery i bootstrap nije bilo kompatibilno ... ali sada radi
+	- u <head> samo dodati:
+
+	<!-- CSS only -->
+    	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    	<!-- JavaScript Bundle with Popper -->
+    	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+	
+	- sa samog kraja samo obrisati @Scripts.Render("~/bundles/bootstrap") jer iz nekog razloga onemoguci ucitavanje partial viewa
+
+za sakriti password pri loginu i napraviti checkbox show/hide password ovako izmijeniti cshtml:
+
+	- @Html.EditorFor(model => model.Pass, new { htmlAttributes = new { @class = "form-control", type = "password", id = "txtPass" } })
+	- na kraju u section scripts dodati:
+
+@section Scripts {
+    @Scripts.Render("~/bundles/jqueryval")
+
+    <script>
+        $(document).ready(function () {
+            $('#ckShowPass').click(function () {
+                const ckbox = $(this);
+                const txtBox = $('#txtPass');
+
+                if (ckbox.is(':checked')) {
+                    txtBox.prop("type", "text");
+                } else {
+                    txtBox.prop("type", "password");
+                }
+            });
+        });
+    </script>
+}
+
+- za uljepsati buttone zamijenis ovo dvoje:
+	- class="btn btn-default" sa style="background-color: #f2f2f2; color: #333; padding: 4px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; text-decoration: none;"
+                       onmouseover="this.style.backgroundColor='#dcdcdc'" onmouseout="this.style.backgroundColor='#f2f2f2'">Details</a>
+                 ili kak vec hoces
+
+- za paging uljepsati:
+
+<div class="pager">
+        @Html.PagedListPager(Model, page => Url.Action("GetAllBoardGamesAsync", new { page, filterBy = ViewBag.CurrentFilter, sorting = ViewBag.CurrentSort }),
+                new PagedListRenderOptions()
+    {
+        Display = PagedListDisplayMode.IfNeeded,
+        DisplayPageCountAndCurrentLocation = false,
+        DisplayLinkToFirstPage = PagedListDisplayMode.Always,
+        DisplayLinkToLastPage = PagedListDisplayMode.Always,
+        DisplayLinkToPreviousPage = PagedListDisplayMode.Always,
+        DisplayLinkToNextPage = PagedListDisplayMode.Always,
+        UlElementClasses = new[] { "custom-pager" }
+    })
+
+        <style>
+            .custom-pager li a {
+                background-color: #f2f2f2;
+                color: #333;
+                padding: 4px 8px;
+                font-size: 14px;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                cursor: pointer;
+                text-decoration: none;
+                text-align: center;
+                text-decoration: none;
+                display: inline-block;
+                margin: 4px 2px;
+            }
+
+            .custom-pager {
+                list-style-type: none;
+                display: flex;
+                flex-direction: row;
+                gap: 0.1rem;
+            }
+
+                .custom-pager li a:hover {
+                    background-color: #dcdcdc;
+                }
+        </style>
+
+    </div>
+
+- za sorting uljepsati:
+
+<style>
+    /* Custom CSS class for the table headers */
+    .table-header {
+        color: black;
+        text-decoration: none;
+    }
+</style>
+
+<a href="@Url.Action("GetAllBoardGamesAsync", new { sorting = ViewBag.SortByTitle, filterBy = ViewBag.CurrentFilter, page = ViewBag.CurrentPage })" class="table-header">
+                    Title @if (ViewBag.SortByTitle == "")
+                    {
+                        <span>↑</span>
+                    }
+                    else if (ViewBag.SortByTitle == "title_desc")
+                    {
+                        <span>↓</span>
+                    }
+                </a>
+
+...
+
+- sorting, paging ne radi jednako u partial view kao u obicnom (s Ajaxom, nece se vidjeti parametri u URL)
+
+- SORTING partial view
+	- novi format za table header (ovdje rating):
+
+            <a href="javascript:void(0);" onclick="sortReviews('@ViewBag.SortByRating')" class="table-header"> 
+
+	- u view gdje treba ucitati partial dodati unutar <script> :
+
+function sortReviews(sorting) {
+            $.get('@Url.Action("GetReviewsForSpecificGameAsync", "Review", new { id = id })', { sorting: sorting }, function (data) {
+                $('#partialReviews').html(data);
+            });
+        }
+
+- PAGING treba updejtati ovo sto smo sad napravili
+	- onaj onclick updejto
+	- odma i dodao stil da oznaci trenutni page drukcijom bojom
+
+<ul class="custom-pager">
+            @if (Model.PageNumber > 1)
+            {
+                <li><a href="javascript:void(0);" onclick="updatePartial('@ViewBag.CurrentSort', @Math.Max(1, Model.PageNumber - 1))"> < </a></li>
+            }
+            @for (var i = 1; i <= Model.PageCount; i++)
+            {
+                <li>
+                    <a href="javascript:void(0);" onclick="updatePartial('@ViewBag.CurrentSort', @i)"
+                       class="@(i == Model.PageNumber ? "active-page" : "")">@i</a>
+                </li>
+            }
+            @if (Model.PageNumber < Model.PageCount)
+            {
+                <li><a href="javascript:void(0);" onclick="updatePartial('@ViewBag.CurrentSort', @Math.Min(Model.PageCount, Model.PageNumber + 1))"> > </a></li>
+            }
+        </ul>
+
+- i u style:
+
+.custom-pager li a.active-page {
+                background-color: #dcdcdc;
+                color: #333;
+            }
+
+- funkciju u glavnom viewu takodjer updejto iz sortReviews u updatePartial i dodao sta treba, redoslijed parametara je bitan
+
+function updatePartial(sorting, page)
+        {
+            $.get('@Url.Action("GetReviewsForSpecificGameAsync", "Review", new { id = id })', { sorting: sorting, page: page }, function (data)
+            {
+                $('#partialReviews').html(data);
+            });
+        }
+
+- ako drugdje gdje imam paging zelim takodjer oznaciti na kojem se page nalazim, treba dodati javascript i onaj style kao maloprije:
+
+@section Scripts 
+{
+    <script> 
+        $(document).ready(function() {
+            var currentPage = @Model.PageNumber;
+            $(".custom-pager li a").each(function(index) {
+                if (index === currentPage + 1) {
+                    $(this).addClass('active-page');
+                }
+            });
+        });
+    </script>
+}
+
+...
+
+- link za navigaciju na prijasnji page, koji god bio, je sa <a href="javascript:history.back()">Go back</a> (ali sam odusto od ovog pristupa, ako returnam view nakon npr edita, moram dvaput kliknut jer postoji taj neki medjukorak do prosle stranice)
+
+- confirmation poruka nakon edita i sl umjesto da redirecta na neki url je:
+	- u razor view: 
+
+	if (TempData["ConfirmationMessage"] != null)
+    	{
+        	<div class="alert alert-success">@TempData["ConfirmationMessage"]</div>
+    	}
+	
+	- u kontroler: 
+		TempData["ConfirmationMessage"] = "Saved!";
+           	return View();
+
+
+...
+
+SQLquery4, gotovo je ali da dovedem tablice u red, prvo obrisao bezvezne unose i onda dodao sa SQLquery4 dodatne da to lici na nesto
+
+Generirao review unose sa ChatGPT pa zeznio Title a nisam skuzio, pa sam popravljo ... zato SQLquery5
