@@ -1,5 +1,6 @@
 # PlayPalMini-MVC
 - C#, SQL, JavaScript
+- SSMS 19
 - ASP.NET MVC
 - .NET Framework 4.7.2
 - Autofac, Autofac.Mvc5
