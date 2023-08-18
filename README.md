@@ -34,7 +34,7 @@ Home page:
 
 ![screenshot](https://github.com/kovac031/PlayPalMini-MVC/blob/main/home-page-2.jpg)
 
-List page with search box, sorting and paging implemented:
+List page with search box, sorting and paging implemented (for non-authenticated user):
 
 ![screenshot](https://github.com/kovac031/PlayPalMini-MVC/blob/main/list-page.jpg)
 
