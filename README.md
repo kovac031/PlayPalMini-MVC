@@ -29,15 +29,23 @@
 
 # Some screenshots:
 Home page:
+
 ![screenshot](https://github.com/kovac031/PlayPalMini-MVC/blob/main/home-page-1.jpg)
 
 ![screenshot](https://github.com/kovac031/PlayPalMini-MVC/blob/main/home-page-2.jpg)
 
 List page with search box, sorting and paging implemented:
+
 ![screenshot](https://github.com/kovac031/PlayPalMini-MVC/blob/main/list-page.jpg)
 
 Login page:
+
 ![screenshot](https://github.com/kovac031/PlayPalMini-MVC/blob/main/login-page.jpg)
 
-Details page of one board game, showing drop down menu of authenticated user, implemented partial view for leaving a new review, implemented a partial view for listing all reviews for just this board game, can be sorted ASC/DESC and has paging:
+Details page of one board game ... 
+- showing drop down menu of authenticated user,
+- implemented partial view for leaving a new review and confirmation message,
+- implemented a partial view for listing all reviews for just this board game, can be sorted ASC/DESC and has paging,
+- the authenticated user can only see details, edit or delete reviews they are the author of:
+
 ![screenshot](https://github.com/kovac031/PlayPalMini-MVC/blob/main/details-page.jpg)
