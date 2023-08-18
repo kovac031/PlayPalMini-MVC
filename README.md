@@ -46,6 +46,6 @@ Details page of one board game ...
 - showing drop down menu of authenticated user,
 - implemented partial view for leaving a new review and confirmation message,
 - implemented a partial view for listing all reviews for just this board game, can be sorted ASC/DESC and has paging,
-- the authenticated user can only see details, edit or delete reviews they are the author of:
+- the authenticated user can see details, edit or delete reviews they are the author of, but not others:
 
 ![screenshot](https://github.com/kovac031/PlayPalMini-MVC/blob/main/details-page.jpg)
